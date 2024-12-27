@@ -3,12 +3,13 @@
 This software is intended to be used with a INSMA laser engraver (3000mW).
 It comes with ABSOLUTELY NO WARRANTY. It may or may not work with an other kind of
 laser engraver.
+![image_of_insma_engraver](./img_insma_engraver.jpg)
 
 This software was created based on the software for the KKMoon laser engraver 
 (kkengraver), modifying the different parts of the protocol.
 
 Note: 
- This software is not protocol compatible with 'kkengraver'.
+ This software is not protocol compatible with 'kkengraver'.  
  Web-based GUI functionality has not yet been tested.
 
 ## Preliminaries
