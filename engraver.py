@@ -1,6 +1,8 @@
-#!/usr/bin/env python3
+#!/usr/bin/python3
 ########################################################################
 # Copyright 2019 Bernd Breitenbach
+# Modified  2024 Yoichi Sato (kemosato)
+#                suited for INSMA laser engraver protocol
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -125,28 +127,50 @@ class Base(object):
 
     
 class EngraverData(Base):
-    X_IDX=7
-    Y_IDX=9
-    DEPTH_IDX=14
-    POW_IDX=11
+#    X_IDX=7
+#    Y_IDX=9
+#    DEPTH_IDX=14
+#    POW_IDX=11
     EXT1_IDX=3
     EXT2_IDX=5
-    #        CMD             ?    ?     ?    ?   XH   XL   YH   YL    POWER    ?  DEPTH
-    HEADER=[0x23,0x00,0x0f,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x03,0xe8,0x00,0x1] 
-    HEADER_ACK=bytes([0xff,0xff,0xff,0xfe])
-    
-    #     CMD  SZH  SZL   DATA...                                                         CHECKBYTE
-    #ROW=[0x22,0x00,0x11,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x0f,0x00] #
 
-    EPILOG1=[0x0a,0x00,0x04,0x00]
-    EPILOG2=[0x24,0x00,0x04,0x00,0x24,0x00,0x04,0x00]
+    X_IDX=7
+    SIZ_IDX=1
+    DEPTH_IDX=4
+    POW_IDX=5
+    Y_IDX=7
+
+#★    #        CMD             ?    ?     ?    ?   XH   XL   YH   YL    POWER    ?  DEPTH
+#★    HEADER=[0x23,0x00,0x0f,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x03,0xe8,0x00,0x1] 
+#★    HEADER_ACK=bytes([0xff,0xff,0xff,0xfe])
+
+    # INSMAのHeaderは9バイト構成、ACK無し
+    #        CMD  SZH  SZL     DEPTH     POWER   YH   YL
+    HEADER=[0x09,0x00,0x00,0x00,0x01,0x03,0xe8,0x00,0x00] 
+#    HEADER_ACK=bytes([0x09])
+    
+#★    #     CMD  SZH  SZL   DATA...                                                         CHECKBYTE
+#★    #ROW=[0x22,0x00,0x11,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x0f,0x00] #
+
+    # INSMAはCMD/SZH/SZL/CheckByte無し
+    #     DATA...                                                         
+    #ROW=[0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x0f] #
+
+#★    EPILOG1=[0x0a,0x00,0x04,0x00]
+#★    EPILOG2=[0x24,0x00,0x04,0x00,0x24,0x00,0x04,0x00]
+    EPILOG1=[0x06,0x00,0x04,0x00]
+    EPILOG2=[0x14,0x00,0x07,0x00,0x0,0x00,0x00]
     
     def __init__(self,sizex,sizey,args):
         Base.__init__(self,args)        
         self.header=self.HEADER[:]
         self._size=(sizex,sizey)
-        self.setValue(self.header,self.X_IDX,sizex)
-        self.setValue(self.header,self.Y_IDX,sizey)
+#★        self.setValue(self.header,self.X_IDX,sizex)
+        self.setValue(self.header,self.SIZ_IDX,sizex+len(self.HEADER))
+
+#★        self.setValue(self.header,self.Y_IDX,sizey)
+        self.setValue(self.header,self.Y_IDX,0)
+
         self.header[self.DEPTH_IDX]=self.limit(args.depth,100,0)
         self.setValue(self.header,self.POW_IDX,self.limit(args.power,100,0)*10)
         #self.setValue(self.header,self.EXT1_IDX,self.limit(args.ext,2048,0))
@@ -157,35 +181,46 @@ class EngraverData(Base):
         return self._size
     
     def addRow(self,data):
-        row=[0x22,0,0]+data
-        self.setValue(row,1,len(row)+1)
-        cbyte=sum(row)
-        if cbyte>256:
-            cbyte=(0x100-(cbyte&0xff))&0xff
-        row.append(cbyte) #checkbyte
+#★        row=[0x22,0,0]+data
+        row=data
+#★        self.setValue(row,1,len(row)+1)
+#★        cbyte=sum(row)
+#★        if cbyte>256:
+#★            cbyte=(0x100-(cbyte&0xff))&0xff
+#★        row.append(cbyte) #checkbyte
         if self.logging("DEBUG"):
-            ldata=row[:3]+[format(r,"#010b")[2:] for r in row[3:-1]]+row[-1:]
+#★           ldata=row[:3]+[format(r,"#010b")[2:] for r in row[3:-1]]+row[-1:]
+            ldata=[format(r,"#010b")[2:] for r in row]
             self.debug("rowdata: %s\n",ldata)
         self.rows.append(row)
         
     def sendData(self,engraver):
         self.info("waiting for engraver\n")
-        engraver.send(self.header,self.HEADER_ACK)
+#★        engraver.send(self.header,self.HEADER_ACK)
+
         total=len(self.rows)
         self.info("sending data (%d rows) ...\n"%total)
         per=0
         ri=0
         for row in self.rows:
-            engraver.send(row)
-            ri+=100
-            cper=ri//total
+
+            self.setValue(self.header,self.SIZ_IDX,len(self.HEADER)+len(row))   #★
+            self.setValue(self.header,self.Y_IDX,ri)
+            engraver.send(self.header+row)
+
+#★            engraver.send(row)
+#★            ri+=100
+#★            cper=ri//total
+            ri+=1
+            cper=(ri*100)//total
+
             if per!=cper:
                 per=cper
                 self.info("\rsending: % 2d%% done",per)
         self.info("\n")
                 
-        engraver.send(self.EPILOG1)
-        engraver.send(self.EPILOG2,None)
+#★        engraver.send(self.EPILOG1)
+#★        engraver.send(self.EPILOG2,None)
 
     #
     #######
@@ -229,7 +264,8 @@ class EngraverData(Base):
                 row=bytesInRow*[0xff]
                 for j in range(im.width):
                     bitno=7-(j&7)
-                    bitval=inv ^ (im.getpixel((j,i))!=0)
+#★                    bitval=inv ^ (im.getpixel((j,i))!=0)
+                    bitval=inv ^ (im.getpixel((j,i))==0)  #★
                     idx=j>>3
                     row[idx]=(row[idx]&~(1<<bitno))|(bitval<<bitno)
                 data.addRow(row)
@@ -357,7 +393,8 @@ class EngraverData(Base):
 class Engraver(Base):
     FAN_ON=[0x4,0x0,0x4,0x0]
     FAN_OFF=[0x5,0x0,0x4,0x0]
-    CONNECT=[0xa,0x0,0x4,0x0,0xff,0x0,0x4,0x0]
+#★    CONNECT=[0xa,0x0,0x4,0x0,0xff,0x0,0x4,0x0]
+    CONNECT=[0xa,0x0,0x4,0x0]
     HOME=[0x17,0x0,0x4,0x0]
     FRAME_STOP=[0x21,0x00,0x04,0x00]
     PAUSE=[0x18,0x0,0x4,0x0]
@@ -393,7 +430,8 @@ class Engraver(Base):
             self.error("cannot open device %s more than once!\n",self.device)
             return
         try:
-            self.ser=serial.Serial(self.device, self.speed,timeout=30)
+#★            self.ser=serial.Serial(self.device, self.speed,timeout=30)
+            self.ser=serial.Serial(self.device, self.speed, timeout=10)
             self.opened=True
         except Exception as ex:
             self.fatal("%s\n",ex)
@@ -415,12 +453,18 @@ class Engraver(Base):
         if not self.connected:
             self.fatal("connection failed! Could not detect engraver!")
         
+    # シリアルポートへデータ送信（exp=NoneでACK無）
     def send(self,data,exp=Base.ACK):
+        # 未読データがあったら送信前に教える
         if self.ser.in_waiting>0:
             stale=self.ser.read(self.ser.in_waiting)
             self.warn("read stale bytes from device: %s\n",stale)
         self.debug("sending:%s\n",data)
+
+        # データ送信
         self.ser.write(bytes(data))
+
+        # ACKを読み込む
         if exp!=None:
             ack=self.ser.read(len(exp))
             if ack==exp:
@@ -448,13 +492,16 @@ class Engraver(Base):
     def connect(self):
         self.debug("connecting...\n")
         self.send(self.CONNECT)
-        resp=self.ser.read(3)
-        self.debug("response read:%s",resp)
-        self.firmware="%s.%s.%s"%(resp[0],resp[1],resp[2])
+#★        resp=self.ser.read(3)
+#★        self.debug("response read:%s",resp)
+#★        self.firmware="%s.%s.%s"%(resp[0],resp[1],resp[2])
+
         self.connected=True
         self._check()
-        self.debug("...connected!")
-        self.info("Firmware version detected:%s\n",self.firmware)
+#★        self.debug("...connected!")
+        self.debug("...connected!\n")
+#★        self.info("Firmware version detected:%s\n",self.firmware)
+#★        self.info("Responce: %s\n",self.firmware)
 
     def home(self):
         self.send(self.HOME)
@@ -522,32 +569,38 @@ class Engraver(Base):
     
     def burn(self,data,useCenter):
         try:
+            engraver.send([0x06,0x00,0x04,0x00]) #★
+            engraver.send([0x14,0x00,0x07,0x00,0x0,0x00,0x00]) #★
             if useCenter:
                 dx,dy=data.size()
                 self.move(-dx//2,-dy//2)
+            self.info("sending to engraver...\n") #★
             data.sendData(self)
             msg="\rcompleted!\n"
-            self.info("engraving...\n")
+#★            self.info("engraving...\n")
             if self.logging("DEBUG"):
                 start=time.time()
             perc=None
-            while True:
-                try:
-                    resp=self.ser.read(4)
-                    if resp==self.COMPLETED:
-                        self.info("\r100%% done")
-                        break
-                    if perc!=resp[3]:
-                        perc=resp[3]
-                        self.info("\r% 2d%% done",perc)
-                except KeyboardInterrupt:
-                    self.pause()
-                    time.sleep(5)
-                    if UI.ASK("Paused! Do you want to cancel the process?"):
-                        self.stop()
-                        msg="\rcanceled!\n"
-                        break
-                    self.cont()
+#★            while True:
+#★                try:
+#★                    resp=self.ser.read(4)
+#★                    if resp==self.COMPLETED:
+#★                        self.info("\r100%% done")
+#★                        break
+#★                    if perc!=resp[3]:
+#★                        perc=resp[3]
+#★                        self.info("\r% 2d%% done",perc)
+#★                except KeyboardInterrupt:
+#★                    self.pause()
+#★                    time.sleep(5)
+#★                    if UI.ASK("Paused! Do you want to cancel the process?"):
+#★                        self.stop()
+#★                        msg="\rcanceled!\n"
+#★                        break
+#★                    self.cont()
+            self.info("\r100%% done\n")
+
+
             if self.logging("DEBUG"):
                 self.debug("engraving time: %.1f secs\n",time.time()-start)
             self.info(msg)

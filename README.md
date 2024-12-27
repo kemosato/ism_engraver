@@ -1,8 +1,15 @@
 # Description of the engraver software
 
-This software is intended to be used with a KKMoon laser engraver (3000mW).
+This software is intended to be used with a INSMA laser engraver (3000mW).
 It comes with ABSOLUTELY NO WARRANTY. It may or may not work with an other kind of
 laser engraver.
+
+This software was created based on the software for the KKMoon laser engraver 
+(kkengraver), modifying the different parts of the protocol.
+
+Note: 
+ This software is not protocol compatible with 'kkengraver'.
+ Web-based GUI functionality has not yet been tested.
 
 ## Preliminaries
 
@@ -434,10 +441,19 @@ B. Select a font from the ones residing in the `fonts` directory.
 
 ## Supported models
 
-Currently this software is tested and works with a KKMoon 3000 (3 Watts power). 
-It may or may not work with other models from KKMoon.
+Currently this software is tested and works with a INSMA 3000 (3 Watts power). 
+It may or may not work with other models from INSMA / KKMoon.
+
+The WAINLAX K3 laser engraver may work, but has not been tested.
+If you have verified this, it would be helpful if you could report back to us.
 
 
+## Thanks
 
+@RBEGamer  Marcel Ochsendorf
+@mogenson  Michael Mogenson
+ - Opened a way for analyze laser engraver protocol.
 
-    
+@aquamorta
+ - A great Python script has been published.
+
